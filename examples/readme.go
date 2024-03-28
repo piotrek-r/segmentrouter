@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/piotrek-r/segmentrouter"
 	"net/http"
-	"segmentrouter"
 )
 
 func main() {

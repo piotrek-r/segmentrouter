@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/piotrek-r/segmentrouter"
 	"log"
 	"net/http"
-	"segmentrouter"
 	"strconv"
 )
 

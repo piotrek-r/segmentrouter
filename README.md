@@ -16,8 +16,8 @@ The library doesn't have any dependencies outside the standard library. The libr
 package main
 
 import (
+	"github.com/piotrek-r/segmentrouter"
 	"net/http"
-	"segmentrouter"
 )
 
 func main() {
