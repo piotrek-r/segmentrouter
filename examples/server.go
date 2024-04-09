@@ -71,10 +71,11 @@ func main() {
 				},
 			},
 		},
+		FallbackHandler: send404,
 	}
 
 	// Listen
-	err := http.ListenAndServe(":8080", segmentrouter.CreateHttpHandler(router, send404))
+	err := http.ListenAndServe(":8080", router)
 	if err != nil {
 		panic(err)
 	}
@@ -91,7 +92,7 @@ func handleGetUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetUser(w http.ResponseWriter, r *http.Request) {
-	parameters := r.Context().Value("params").(segmentrouter.Parameters)
+	parameters := segmentrouter.GetParametersFromContext(r.Context())
 
 	id := parameters["id"]
 
@@ -101,7 +102,7 @@ func handleGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routeName := parameters[segmentrouter.RouteNameParam]
+	routeName := parameters[segmentrouter.ParamRouteName]
 
 	sendJson(map[string]string{"id": id, "name": "Alice", "route": routeName}, w)
 }
@@ -116,7 +117,7 @@ func handlePostGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetGroup(w http.ResponseWriter, r *http.Request) {
-	parameters := r.Context().Value("params").(segmentrouter.Parameters)
+	parameters := segmentrouter.GetParametersFromContext(r.Context())
 
 	id := parameters["id"]
 
@@ -126,7 +127,7 @@ func handleGetGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routeName := parameters[segmentrouter.RouteNameParam]
+	routeName := parameters[segmentrouter.ParamRouteName]
 
 	sendJson(map[string]string{"id": id, "name": "Group 1", "route": routeName}, w)
 }
@@ -145,7 +146,24 @@ func sendJson(data any, w http.ResponseWriter) {
 	_, _ = w.Write(output)
 }
 
+func sendResult(w http.ResponseWriter, r *http.Request) {
+	result := segmentrouter.GetRouterResultFromContext(r.Context())
+
+	switch result {
+	case segmentrouter.RouterResultMethodNotAllowed:
+		send405(w, r)
+	case segmentrouter.RouterResultPathNotFound:
+	default:
+		send404(w, r)
+	}
+}
+
 func send404(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("{\"error\":\"Not found\"}"))
+}
+
+func send405(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+	_, _ = w.Write([]byte("{\"error\":\"Method not allowed\"}"))
 }
