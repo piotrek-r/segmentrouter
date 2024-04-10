@@ -16,7 +16,7 @@ type SegmentRouterTest struct {
 type SegmentRouterTestPath struct {
 	path     string
 	method   string
-	expected bool
+	expected RouterResult
 	fn       func(*testing.T, SegmentRouterTestPath, http.HandlerFunc, Parameters)
 }
 
@@ -54,7 +54,7 @@ var tests = []SegmentRouterTest{
 			{
 				path:     "/",
 				method:   "GET",
-				expected: false,
+				expected: RouterResultPathNotFound,
 			},
 		},
 	},
@@ -80,17 +80,17 @@ var tests = []SegmentRouterTest{
 			{
 				path:     "/",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/about",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/contact",
 				method:   "GET",
-				expected: false,
+				expected: RouterResultPathNotFound,
 			},
 		},
 	},
@@ -163,17 +163,17 @@ var tests = []SegmentRouterTest{
 						"POST": emptyHandler,
 					},
 					SubSegments: []Segment{
+						StaticSegment{
+							Value: "any-method",
+							Handlers: map[string]http.HandlerFunc{
+								"*": emptyHandler,
+							},
+						},
 						ParamSegment{
 							ParamName: "id",
 							Handlers: map[string]http.HandlerFunc{
 								"GET":  emptyHandler,
 								"POST": emptyHandler,
-							},
-						},
-						StaticSegment{
-							Value: "any-method",
-							Handlers: map[string]http.HandlerFunc{
-								"*": emptyHandler,
 							},
 						},
 					},
@@ -184,114 +184,119 @@ var tests = []SegmentRouterTest{
 			{
 				path:     "/",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/",
 				method:   "POST",
-				expected: false,
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-read-only",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-only",
 				method:   "POST",
-				expected: false,
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-read-only/123",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 				fn:       checkParams(map[string]string{"id": "123"}),
 			},
 			{
 				path:     "/collection-read-only/123",
 				method:   "POST",
-				expected: false,
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-read-only/234/subpath",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 				fn:       checkParams(map[string]string{"id": "234"}),
 			},
 			{
 				path:     "/collection-insertable",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-insertable",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-insertable/123",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-insertable/123",
 				method:   "POST",
-				expected: false,
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-updateable",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-updateable",
 				method:   "POST",
-				expected: false,
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-updateable/123",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-updateable/123",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write/123",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write/123",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
+			},
+			{
+				path:     "/collection-read-write/123",
+				method:   "DELETE",
+				expected: RouterResultMethodNotAllowed,
 			},
 			{
 				path:     "/collection-read-write/any-method",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write/any-method",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
 			},
 			{
 				path:     "/collection-read-write/any-method",
 				method:   "DELETE",
-				expected: true,
+				expected: RouterResultFound,
 			},
 		},
 	},
@@ -316,19 +321,19 @@ var tests = []SegmentRouterTest{
 			{
 				path:     "/",
 				method:   "GET",
-				expected: true,
+				expected: RouterResultFound,
 				fn:       checkHandler("GET"),
 			},
 			{
 				path:     "/",
 				method:   "POST",
-				expected: true,
+				expected: RouterResultFound,
 				fn:       checkHandler("Any method"),
 			},
 			{
 				path:     "/",
 				method:   "DELETE",
-				expected: true,
+				expected: RouterResultFound,
 				fn:       checkHandler("Any method"),
 			},
 		},
@@ -340,9 +345,10 @@ func TestSegmentRouter_Match(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			for _, tt := range test.tests {
 				t.Run(fmt.Sprintf("%s→%s", tt.method, tt.path), func(t *testing.T) {
-					got, handler, params := test.router.Match(tt.method, tt.path)
-					if got != tt.expected {
-						t.Errorf("SegmentRouter.Match() = %v, want %v", got, tt.expected)
+					req := httptest.NewRequest(tt.method, tt.path, nil)
+					result, handler, params := test.router.Match(req)
+					if result != tt.expected {
+						t.Errorf("SegmentRouter.Match() = %v, want %v", result, tt.expected)
 					}
 					if tt.fn != nil {
 						tt.fn(t, tt, handler, params)
@@ -353,7 +359,7 @@ func TestSegmentRouter_Match(t *testing.T) {
 	}
 }
 
-func TestCreateHttpHandler(t *testing.T) {
+func TestSegmentRouter_ServeHTTP(t *testing.T) {
 	router := SegmentRouter{
 		Segments: []Segment{
 			StaticSegment{
@@ -363,16 +369,15 @@ func TestCreateHttpHandler(t *testing.T) {
 				},
 			},
 		},
+		FallbackHandler: func(writer http.ResponseWriter, request *http.Request) {
+			http.Error(writer, "Not found", http.StatusNotFound)
+		},
 	}
-
-	handler := CreateHttpHandler(router, func(writer http.ResponseWriter, request *http.Request) {
-		http.Error(writer, "Not found", http.StatusNotFound)
-	})
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "/", nil)
 
-	handler.ServeHTTP(w, r)
+	router.ServeHTTP(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code 200, got %d", w.Code)
@@ -381,7 +386,7 @@ func TestCreateHttpHandler(t *testing.T) {
 	w = httptest.NewRecorder()
 	r, _ = http.NewRequest("GET", "/not-found", nil)
 
-	handler.ServeHTTP(w, r)
+	router.ServeHTTP(w, r)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status code 404, got %d", w.Code)

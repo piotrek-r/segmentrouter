@@ -18,9 +18,11 @@ func main() {
 				},
 			},
 		},
+		FallbackHandler: func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("Not found"))
+		},
 	}
 
-	_ = http.ListenAndServe(":8080", segmentrouter.CreateHttpHandler(router, func(w http.ResponseWriter, r *http.Request) {
-		// fallback handler
-	}))
+	_ = http.ListenAndServe(":8080", router)
 }
